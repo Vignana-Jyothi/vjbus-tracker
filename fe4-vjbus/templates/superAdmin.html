@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VJ Bus Monitoring System</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <!-- Original Styling -->
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            height: 100%;
+        }
+        #map {
+            flex: 3;
+            height: 100%;
+        }
+        .sidebar {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            max-width: 350px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #0056b3;
+            position: relative;
+            padding-left: 40px;
+        }
+        .back-button {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #0056b3;
+            padding: 5px;
+        }
+        .back-button:hover {
+            color: #003d82;
+        }
+        .bus-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .bus-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .bus-active {
+            border-left: 5px solid #28a745;
+        }
+        .bus-stopped {
+            border-left: 5px solid #dc3545;
+        }
+        .disconnect-btn {
+            padding: 5px 10px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        .disconnect-btn:hover {
+            background: #c82333;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .status-active {
+            background-color: #28a745;
+        }
+        .status-stopped {
+            background-color: #dc3545;
+        }
+        .connection-status {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .socket-id {
+            font-size: 0.8em;
+            color: #6c757d;
+            word-break: break-all;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            cursor: pointer;
+            background: #e9ecef;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab.active {
+            background: #0056b3;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .refresh-btn {
+            padding: 5px 10px;
+            background: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .refresh-btn:hover {
+            background: #004494;
+        }
+        .location-info {
+            margin-top: 8px;
+            padding: 8px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .location-btn {
+            padding: 3px 8px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 5px;
+            margin-right: 5px;
+            font-size: 0.8em;
+        }
+        .location-btn:hover {
+            background: #218838;
+        }
+        .start-location-btn {
+            padding: 5px 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        .start-location-btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>
+                <button class="back-button" id="backButton">←</button>
+                Bus Monitor
+            </h2>
+            <div class="connection-status" id="connectionStatus">🔄 Connecting...</div>
+
+            <div class="tabs">
+                <div class="tab active" data-tab="activeUIs">Active UIs</div>
+                <div class="tab" data-tab="activeConnections">Active Locations</div>
+            </div>
+
+            <div class="tab-content active" id="activeUIsTab">
+                <button class="refresh-btn" id="refreshUIsBtn">Refresh UIs</button>
+                <ul class="bus-list" id="activeUIsList"></ul>
+            </div>
+
+            <div class="tab-content" id="activeConnectionsTab">
+                <button class="refresh-btn" id="refreshConnectionsBtn">Refresh Locations</button>
+                <ul class="bus-list" id="activeConnectionsList"></ul>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+    <script>
+        // Add event listener for the back button
+        document.getElementById('backButton').addEventListener('click', function() {
+            window.location.href = '/admin';
+        });
+    </script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io("wss://dev-bus.vjstartup.com", {
+            transports: ["websocket"],
+            reconnection: true,
+            reconnectionAttempts: 50,
+            reconnectionDelay: 1000,
+            query: {
+                route_id: "Admin", // replace with dynamic route ID if needed
+                role: "Admin"     // or "Student", etc.
+            }
+        });
+        // Map setup
+        const COLLEGE_POSITION = [17.539873, 78.386514];
+        const map = L.map('map').setView(COLLEGE_POSITION, 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        L.marker(COLLEGE_POSITION).addTo(map).bindPopup('College');
+
+        // Global state
+        let busMarkers = {};
+
+        // UI Elements
+        const activeUIsListEl = document.getElementById('activeUIsList');
+        const activeConnectionsListEl = document.getElementById('activeConnectionsList');
+
+        // --- Main Tab Switching Logic ---
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById(`${tabId}Tab`).classList.add('active');
+            });
+        });
+
+        // --- Active UIs Workflow ---
+        async function fetchActiveUIs() {
+            try {
+                socket.emit("all_drivers", null, (data) => {
+                    if (!data || data.length === 0) {
+                        throw new Error("No UI data received");
+                    }
+                    renderActiveUIs(data);
+                });
+            } catch (err) {
+                console.error('Failed to fetch Active UIs:', err);
+                activeUIsListEl.innerHTML = '<li class="bus-item">Error loading UIs.</li>';
+            }
+        }
+
+        function renderActiveUIs(data) {
+            activeUIsListEl.innerHTML = '';
+            const routeIds = Object.keys(data);
+            if (routeIds.length === 0) {
+                activeUIsListEl.innerHTML = '<li class="bus-item">No Active UIs found.</li>';
+                return;
+            }
+
+            routeIds.forEach(routeId => {
+                const socketId = data[routeId];
+                const listItem = document.createElement('li');
+                listItem.className = 'bus-item bus-stopped'; // Default to stopped status
+                listItem.innerHTML = `
+                    <div><strong>${routeId}</strong></div>
+                    <div class="socket-id">Socket ID: ${socketId}</div>
+                    <button class="start-location-btn" data-route-id="${routeId}" data-socket-id="${socketId}">Start Location</button>
+                `;
+                activeUIsListEl.appendChild(listItem);
+            });
+        }
+        
+        // --- Active Connections Workflow ---
+        function fetchActiveConnections() {
+            try {
+                socket.emit("all_locations", null, (data) => {
+                    if (!data || data.length === 0) {
+                        console.warn("No active Busses found.");
+                    }
+                    renderActiveConnections(data);
+                    updateMapMarkers(data);
+                });
+            } catch (err) {
+                console.error('Failed to fetch Active Busses:', err);
+                activeConnectionsListEl.innerHTML = '<li class="bus-item">Error loading busses.</li>';
+            }
+        }
+
+        
+        function renderActiveConnections(data) {
+            activeConnectionsListEl.innerHTML = '';
+            if (data.length === 0) {
+                activeConnectionsListEl.innerHTML = '<li class="bus-item">No Active Locations found.</li>';
+                return;
+            }
+            
+            data.forEach(conn => {
+                const status = conn.status === 'stopped' ? 'stopped' : 'active';
+                const hasLocation = conn.latitude !== undefined && conn.longitude !== undefined;
+                const locationHtml = hasLocation
+                    ? `Latitude: ${conn.latitude.toFixed(6)}<br>Longitude: ${conn.longitude.toFixed(6)}<br> Heading: ${conn.heading.toFixed(2)}<br>Status: ${conn.status=="tracking_active"? "Active" : "Waiting "}`
+                    : 'No location data available';
+                
+                const listItem = document.createElement('li');
+                listItem.className = `bus-item bus-${status}`;
+                listItem.innerHTML = `
+                    <div>
+                        <span class="status-indicator status-${status}"></span>
+                        <strong>${conn.route_id}</strong>
+                    </div>
+                    <div class="socket-id">Socket ID: ${conn.socketId}</div>
+                    <div class="location-info">${locationHtml}</div>
+                    <button class="location-btn" data-lat="${conn.latitude}" data-lng="${conn.longitude}">Focus on Map</button>
+                    <button class="disconnect-btn" data-socket-id="${conn.socketId}">Disconnect</button>
+                `;
+                activeConnectionsListEl.appendChild(listItem);
+            });
+        }
+
+        // --- Map Marker Logic ---
+        function updateMapMarkers(connections) {
+            // Remove markers for routes no longer in the active connections list
+            const activeRouteIds = new Set(connections.map(c => c.route_id));
+            for (const routeId in busMarkers) {
+                if (!activeRouteIds.has(routeId)) {
+                    map.removeLayer(busMarkers[routeId]);
+                    delete busMarkers[routeId];
+                }
+            }
+
+            // Update or add markers for current connections
+            connections.forEach(conn => {
+                if (conn.latitude !== undefined && conn.longitude !== undefined) {
+                    const pos = [conn.latitude, conn.longitude];
+                    const color = conn.status === 'stopped' ? '#dc3545' : '#28a745';
+                    const icon = L.divIcon({
+                        html: `<div style="background-color:${color};width:12px;height:12px;border-radius:50%;border:2px solid white;"></div>`,
+                        className: 'bus-marker',
+                        iconSize: [16, 16]
+                    });
+                    
+                    if (busMarkers[conn.route_id]) {
+                        busMarkers[conn.route_id].setLatLng(pos).setIcon(icon);
+                    } else {
+                        busMarkers[conn.route_id] = L.marker(pos, { icon }).addTo(map);
+                    }
+                    busMarkers[conn.route_id].bindPopup(`<b>${conn.route_id}</b>`);
+                }
+            });
+        }
+
+        // --- Event Listeners for Dynamic Buttons ---
+        document.addEventListener('click', (e) => {
+            // Start Location Button
+            if (e.target.matches('.start-location-btn')) {
+                const routeId = e.target.dataset.routeId;
+                const socketId = e.target.dataset.socketId;
+                if (confirm(`Start location tracking for ${routeId} and socket ${socketId}?`)) {
+                    socket.emit('admin_start_location', { route_id: routeId, socket_id: socketId });
+                }
+            }
+            // Disconnect Button
+            if (e.target.matches('.disconnect-btn')) {
+                const socketId = e.target.dataset.socketId;
+                if (confirm(`Disconnect socket ${socketId}?`)) {
+                    socket.emit('admin_stop_location', { socket_id: socketId });
+                }
+            }
+            // Focus on Map Button
+            if (e.target.matches('.location-btn')) {
+                const lat = parseFloat(e.target.dataset.lat);
+                const lng = parseFloat(e.target.dataset.lng);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    map.setView([lat, lng], 16);
+                } else {
+                    alert('No location data to focus on.');
+                }
+            }
+        });
+        
+        // --- Manual Refresh Buttons ---
+        document.getElementById('refreshUIsBtn').addEventListener('click', fetchActiveUIs);
+        document.getElementById('refreshConnectionsBtn').addEventListener('click', fetchActiveConnections);
+
+        // --- Socket Event Handlers ---
+        socket.on('connect', () => {
+            document.getElementById('connectionStatus').innerHTML = '⚫⚫🟢 Connected';
+            fetchActiveUIs();
+            fetchActiveConnections();
+            // Set up automatic refresh for Active UIs
+            setInterval(fetchActiveUIs, 5000);
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connectionStatus').innerHTML = '🔴⚫⚫ Disconnected';
+        });
+
+        // Trigger for Active Connections update
+        socket.on('location_update', () => {
+            fetchActiveConnections();
+        });
+
+        socket.on('yet_to_be_bradcasted', () => {
+            fetchActiveConnections();
+        });
+
+        socket.on('admin_stop_location_response', (res) => {
+            // alert(res.message);
+            fetchActiveConnections(); // Refresh list after disconnect
+        });
+
+        socket.on('admin_start_location_response', (res) => {
+            // alert(res.message);
+            fetchActiveUIs(); // Refresh to remove the started UI
+            fetchActiveConnections(); // Refresh to show the new connection
+        });
+
+    </script>
+</body>
+</html>

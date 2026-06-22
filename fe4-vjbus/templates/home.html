@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VJ Bus Tracker</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            text-align: center;
+        }
+
+        .title {
+            color: #fff;
+            margin-bottom: 40px;
+        }
+
+        .title h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+        }
+
+        .title p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .modules {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 25px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 18px;
+            padding: 35px 25px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 18px 35px rgba(0, 0, 0, 0.2);
+        }
+
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            color: #222;
+        }
+
+        .card p {
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            min-height: 70px;
+        }
+
+        .btn {
+            width: 100%;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            transition: opacity 0.2s ease;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .student-btn {
+            background: #4285F4;
+        }
+
+        .driver-btn {
+            background: #34A853;
+        }
+
+        .admin-btn {
+            background: #EA4335;
+        }
+
+        @media (max-width: 768px) {
+            .title h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="title">
+        <h1>🚌 VJ Bus Tracker</h1>
+        <p>Select your role to continue</p>
+    </div>
+
+    <div class="modules">
+
+        <!-- Student Module -->
+        <div class="card">
+            <div class="icon">🎓</div>
+
+            <h2>Student</h2>
+
+            <p>
+                Sign in with Google, select your route, and track your bus in real time.
+            </p>
+
+            <button class="btn student-btn" onclick="goToStudent()">
+                Continue as Student
+            </button>
+        </div>
+
+        <!-- Driver Module -->
+        <div class="card">
+            <div class="icon">🚌</div>
+
+            <h2>Driver</h2>
+
+            <p>
+                Log in using Driver ID and PIN, scan the bus QR code, and start your trip.
+            </p>
+
+            <button class="btn driver-btn" onclick="goToDriver()">
+                Continue as Driver
+            </button>
+        </div>
+
+        <!-- Admin Module -->
+        <div class="card">
+            <div class="icon">⚙️</div>
+
+            <h2>Admin</h2>
+
+            <p>
+                Manage routes, drivers, buses, and monitor live trips.
+            </p>
+
+            <button class="btn admin-btn" onclick="goToAdmin()">
+                Continue as Admin
+            </button>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    function goToStudent() {
+        window.location.href = "https://dev-bus.vjstartup.com";
+    }
+
+    function goToDriver() {
+        window.location.href = "/driver-login";
+    }
+
+    function goToAdmin() {
+        window.location.href = "https://dev-bus.vjstartup.com/admin";
+    }
+</script>
+
+</body>
+</html>

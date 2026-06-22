@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VS Code Live Share Restart</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; }
+        #linkBox { margin-top: 20px; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h2>VS Code Live Share Control</h2>
+    <button onclick="restartLiveShare()">Restart Session</button>
+    <div id="linkBox">Press the button to restart and fetch a new link.</div>
+
+    <script>
+        async function restartLiveShare() {
+            document.getElementById("linkBox").innerHTML = "Restarting Live Share session...";
+            
+            await fetch("/restart-liveshare", {
+                method: "POST"
+            });
+
+            setTimeout(fetchLink, 3000);
+        }
+
+        async function fetchLink() {
+            const res = await fetch("/get-liveshare-link");
+            const data = await res.json();
+            if (data.link) {
+                document.getElementById("linkBox").innerHTML =
+                    `<strong>Live Share Link:</strong> <a href="${data.link}" target="_blank">${data.link}</a>`;
+            } else {
+                document.getElementById("linkBox").innerHTML = "No Live Share session found.";
+            }
+        }
+    </script>
+</body>
+</html>

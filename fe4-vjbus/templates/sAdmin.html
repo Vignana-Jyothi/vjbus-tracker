@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VJ Bus Monitoring System</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            height: 100%;
+        }
+        #map {
+            flex: 3;
+            height: 100%;
+        }
+        .sidebar {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            max-width: 350px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .bus-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .bus-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .bus-active {
+            border-left: 5px solid #28a745;
+        }
+        .bus-stopped {
+            border-left: 5px solid #dc3545;
+        }
+        .disconnect-btn, .start-location-btn {
+            padding: 5px 10px;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 5px;
+            margin-right: 5px;
+        }
+        .disconnect-btn {
+            background: #dc3545;
+        }
+        .disconnect-btn:hover {
+            background: #c82333;
+        }
+        .start-location-btn {
+            background: #28a745;
+        }
+        .start-location-btn:hover {
+            background: #218838;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .status-active {
+            background-color: #28a745;
+        }
+        .status-stopped {
+            background-color: #dc3545;
+        }
+        .connection-status {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .socket-id {
+            font-size: 0.8em;
+            color: #6c757d;
+            word-break: break-all;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            cursor: pointer;
+            background: #e9ecef;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab.active {
+            background: #0056b3;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .refresh-btn {
+            padding: 5px 10px;
+            background: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .refresh-btn:hover {
+            background: #004494;
+        }
+        .location-info {
+            margin-top: 8px;
+            padding: 8px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Bus Monitor</h2>
+            <div class="connection-status" id="connectionStatus">🔄 Connecting...</div>
+            
+            <div class="tabs">
+                <div class="tab active" data-tab="uis">Active UIs</div>
+                <div class="tab" data-tab="connections">Active Connections</div>
+            </div>
+            
+            <div class="tab-content active" id="uisTab">
+                <button class="refresh-btn" id="refreshUIs">Refresh UIs</button>
+                <ul class="bus-list" id="uiList">
+                    <!-- Active UIs list will be populated here -->
+                </ul>
+            </div>
+            
+            <div class="tab-content" id="connectionsTab">
+                <button class="refresh-btn" id="refreshConnections">Refresh Connections</button>
+                <ul class="bus-list" id="connectionsList">
+                    <!-- Connections list will be populated here -->
+                </ul>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+    // Constants
+const COLLEGE_POSITION = [17.539873, 78.386514]; // College position
+const MAX_INACTIVITY_MS = 60000; // Consider a bus inactive after 1 minute without updates
+
+// Initialize socket connection
+const websocketUrl = "wss://dev-bus.vjstartup.com";
+const socket = io(websocketUrl, { transports: ['websocket'] });
+
+// Initialize map
+const map = L.map('map').setView(COLLEGE_POSITION, 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+// Add college marker
+const collegeIcon = L.divIcon({
+    html: `<div style="background-color: #0056b3; width: 15px; height: 15px; border-radius: 50%; border: 2px solid white;"></div>`,
+    className: 'college-marker',
+    iconSize: [20, 20]
+});
+L.marker(COLLEGE_POSITION, { icon: collegeIcon }).addTo(map)
+    .bindPopup('College');
+
+// College fence (1.5km radius)
+L.circle(COLLEGE_POSITION, {
+    radius: 1500,
+    color: '#0056b3',
+    fillColor: '#0056b3',
+    fillOpacity: 0.1
+}).addTo(map);
+
+// Data stores
+const busMarkers = {};
+let activeConnections = [];
+
+// Tab functionality
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const tabId = tab.getAttribute('data-tab');
+        document.getElementById(`${tabId}Tab`).classList.add('active');
+    });
+});
+
+// Socket event handlers
+socket.on('connect', () => {
+    document.getElementById('connectionStatus').innerHTML = '🟢 Connected';
+    fetchActiveUIs();
+    fetchConnections();
+});
+
+socket.on('disconnect', () => {
+    document.getElementById('connectionStatus').innerHTML = '🔴 Disconnected';
+});
+
+socket.on('location_update', (data) => {
+    updateBusMarker(data.route_id, data.latitude, data.longitude, data.heading || 0, data.status || 'tracking_active');
+});
+
+socket.on('admin_disconnect_response', (response) => {
+    console.log("Disconnect response:", response);
+    alert(response.message);
+    fetchConnections();
+});
+
+// --- UI Update Functions ---
+
+function updateBusMarker(routeId, latitude, longitude, heading, status) {
+    const position = [latitude, longitude];
+    const busIconHtml = `<div style="transform: rotate(${heading}deg); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2L2 7v9l10 5 10-5V7L12 2zm0 2.236L19.043 8 12 11.764 4.957 8 12 4.236zM4 9.309l8 4 8-4v6.382l-8 4-8-4V9.309z" fill="${status === 'stopped' ? '#dc3545' : '#28a745'}"/></svg></div>`;
+    
+    const busIcon = L.divIcon({
+        html: busIconHtml,
+        className: 'bus-marker',
+        iconSize: [20, 20]
+    });
+    
+    if (busMarkers[routeId]) {
+        busMarkers[routeId].setLatLng(position).setIcon(busIcon);
+    } else {
+        busMarkers[routeId] = L.marker(position, { icon: busIcon }).addTo(map);
+    }
+    
+    busMarkers[routeId].bindPopup(`<b>${routeId}</b><br>Status: ${status === 'stopped' ? 'Stopped' : 'Active'}`);
+}
+
+function updateUIList(uiDataObject) {
+    const uiList = document.getElementById('uiList');
+    uiList.innerHTML = '';
+
+    // Check if the received data is a valid, non-null, non-array object
+    if (typeof uiDataObject !== 'object' || uiDataObject === null || Array.isArray(uiDataObject)) {
+        uiList.innerHTML = '<li class="bus-item">Invalid UI data format received.</li>';
+        console.error("Expected a key-value object for UI data, but received:", uiDataObject);
+        return;
+    }
+
+    const entries = Object.entries(uiDataObject);
+
+    if (entries.length === 0) {
+        uiList.innerHTML = '<li class="bus-item">No active UIs found.</li>';
+        return;
+    }
+
+    // Now we can safely use forEach on the 'entries' array
+    entries.forEach(([routeName, socketId]) => {
+        const listItem = document.createElement('li');
+        listItem.className = 'bus-item';
+
+        listItem.innerHTML = `
+            <div><strong>Route:</strong> ${routeName}</div>
+            <div class="socket-id">Socket ID: ${socketId}</div>
+        `;
+        uiList.appendChild(listItem);
+    });
+}
+
+
+function updateConnectionsList() {
+    const connectionsList = document.getElementById('connectionsList');
+    connectionsList.innerHTML = '';
+    
+    if (activeConnections.length === 0) {
+        connectionsList.innerHTML = '<li class="bus-item">No active connections</li>';
+        return;
+    }
+    
+    activeConnections.sort((a, b) => a.route_id.localeCompare(b.route_id));
+    
+    activeConnections.forEach(conn => {
+        const status = conn.status === 'stopped' ? 'stopped' : 'active';
+        const hasLocation = conn.latitude !== undefined && conn.longitude !== undefined;
+        
+        const locationHtml = hasLocation ? 
+            `<div class="location-info">
+                <strong>Location:</strong><br>
+                Lat: ${parseFloat(conn.latitude).toFixed(6)}, Lng: ${parseFloat(conn.longitude).toFixed(6)}
+                ${conn.heading ? '<br>Heading: ' + parseFloat(conn.heading).toFixed(2) + '°' : ''}
+            </div>` : 
+            `<div class="location-info" style="color: #888;">No location data</div>`;
+        
+        const listItem = document.createElement('li');
+        listItem.className = `bus-item bus-${status}`;
+        listItem.innerHTML = `
+            <div>
+                <span class="status-indicator status-${status}"></span>
+                <strong>${conn.route_id}</strong> 
+            </div>
+            <div class="socket-id">Socket ID: ${conn.socketId}</div>
+            <div style="font-size: 0.9em; margin: 5px 0;">Status: ${status}</div>
+            ${locationHtml}
+            <div>
+                <button class="location-btn" data-lat="${conn.latitude}" data-lng="${conn.longitude}">Focus on Map</button>
+                <button class="disconnect-btn" data-socket="${conn.socketId}">Disconnect</button>
+            </div>
+        `;
+        connectionsList.appendChild(listItem);
+    });
+    
+    // Add event listeners
+    document.querySelectorAll('.disconnect-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            disconnectSocket(e.target.getAttribute('data-socket'));
+        });
+    });
+
+    document.querySelectorAll('.start-location-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const socketId = e.target.getAttribute('data-socket');
+            if (socketId) {
+                socket.emit('admin_start_location', { socket_id: socketId });
+                console.log(`Emitted 'admin_start_location' for socket ${socketId}`);
+                alert(`Sent 'start location' request for socket: ${socketId}`);
+            }
+        });
+    });
+}
+
+// --- Action Functions ---
+
+function disconnectSocket(socketId) {
+    if (confirm(`Are you sure you want to disconnect socket ${socketId}?`)) {
+        socket.emit('admin_disconnect_socket', { socket_id: socketId });
+    }
+}
+
+// --- Data Fetching ---
+
+function fetchActiveUIs() {
+    fetch('https://dev-bus.vjstartup.com/bus-be/get_all_uis')
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log("Fetched active UIs:", data);
+            updateUIList(data);
+        })
+        .catch(error => {
+            console.error("Failed to fetch active UIs:", error);
+            document.getElementById('uiList').innerHTML = 
+                '<li class="bus-item">Error fetching UIs. See console.</li>';
+        });
+}
+
+function fetchConnections() {
+    fetch('https://dev-bus.vjstartup.com/bus-be/get_all_connections')
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            console.log("Fetched connections:", data);
+            activeConnections = data;
+            updateConnectionsList();
+        })
+        .catch(error => {
+            console.error("Failed to fetch connections:", error);
+            document.getElementById('connectionsList').innerHTML = 
+                '<li class="bus-item">Error fetching connections. See console.</li>';
+        });
+}
+
+// --- Event Listeners & Initial Calls ---
+
+document.getElementById('refreshUIs').addEventListener('click', fetchActiveUIs);
+document.getElementById('refreshConnections').addEventListener('click', fetchConnections);
+</script>
+</body>
+</html>
