@@ -15,13 +15,18 @@ import threading
 import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-load_dotenv()
-from flask import Flask
+import requests
 
-from flask_cors import CORS
 from google.oauth2 import id_token
 from google.auth.transport import requests as grequests
+from dotenv import load_dotenv
+import os
 
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=dotenv_path)
+
+print("Using .env:", dotenv_path)
+print("ENV =", os.getenv("all_start_timings"))
 
 
 started_routes = {}
@@ -29,9 +34,16 @@ all_locations = []
 all_drivers={}
 user_count={"Student":0, "Driver":0, "Admin":0, "Unknown":0}
 
-all_start_timings=json.loads(os.getenv("all_start_timings", "{}"))
+timings = os.getenv("all_start_timings")
+
+if timings:
+    all_start_timings = json.loads(timings)
+else:
+    print("ERROR: all_start_timings not found in .env")
+    all_start_timings = {}
 
 PORT = 6104
+CLIENT_ID = "719105319954-5alrrgdri16s96121ikn662p16ltp2nj.apps.googleusercontent.com"
 
 # Check port availability
 def is_port_in_use(port):
@@ -41,10 +53,6 @@ def is_port_in_use(port):
 if is_port_in_use(PORT):
     print(f"❌ Flask is already running on port {PORT}. Exiting.")
     sys.exit(1)
-
-
-CLIENT_ID = "719105319954-5alrrgdri16s96121ikn662p16ltp2nj.apps.googleusercontent.com"
-print("CLIENT_ID =", CLIENT_ID)
 
 app = Flask(__name__)
 CORS(app)
@@ -144,37 +152,47 @@ def is_in_college(lon, lat):
 
 def log_data(route_id):
     try:
+        import os
+        print("log_data() called")
+        print("Route:", route_id)
+        print("Database:", os.path.abspath("database.db"))
+
         conn = sqlite3.connect("database.db", check_same_thread=False)
         cursor = conn.cursor()
+
         current_date = datetime.now().strftime("%Y-%m-%d")
         current_time = datetime.now().strftime("%H:%M:%S")
 
-        # Step 1: Check if the bus is already logged today
+        print("Current Date:", current_date)
+        print("Current Time:", current_time)
+
         cursor.execute("""
             SELECT 1 FROM logs WHERE route_number = ? AND log_date = ?
         """, (route_id, current_date))
 
-        exists = cursor.fetchone()  # Fetch result (None if f)
+        exists = cursor.fetchone()
+        print("Already exists:", exists)
 
-        # Step 2: If not logged, insert the new log
         if not exists:
             cursor.execute("""
-                INSERT INTO logs 
-                VALUES (?, ?, ?)
+                INSERT INTO logs VALUES (?, ?, ?)
             """, (route_id, current_date, current_time))
             conn.commit()
+            print("Inserted successfully")
             conn.close()
-            print(f"Bus {route_id} logged at {current_time}")
             log_user_count()
         else:
             cursor.execute("""
-                Update logs set log_time=? where route_number=? and log_date=?
+                UPDATE logs
+                SET log_time=?
+                WHERE route_number=? AND log_date=?
             """, (current_time, route_id, current_date))
-            print(f"Bus {route_id} already logged today. Updated time to {current_time}")
             conn.commit()
+            print("Updated successfully")
             conn.close()
-    except sqlite3.Error as e:
-        print(f"Error logging data: {e}")
+
+    except Exception as e:
+        print(e)
 
 
 def log_user_count():
@@ -282,90 +300,76 @@ def handle_driver_connect(data):
 @socketio.on("location_update")
 def handle_location_update(data):
     from datetime import datetime
+
     time_now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"{time_now} Received location update:  ", data)
+    print(f"{time_now} Received:", data)
+
     route_id = data.get("route_id")
     latitude = data.get("latitude")
     longitude = data.get("longitude")
-    heading = data.get("heading")  # New field
-    status = data.get("status")  # New field
-    sid=data.get("socket_id")
-    
-    existing_route = next((r for r in all_locations if r["route_id"] == route_id), None)
-    if not existing_route and status != "stopped":
-        all_locations.append({
+    heading = data.get("heading")
+    status = data.get("status")
+    sid = data.get("socket_id")
+
+    existing_route = next(
+        (r for r in all_locations if r["route_id"] == route_id),
+        None
+    )
+
+    if existing_route is None and status != "stopped":
+        existing_route = {
             "route_id": route_id,
             "latitude": latitude,
             "longitude": longitude,
             "heading": heading,
             "status": status,
             "socketId": sid
-        })
-        started_routes[route_id] = sid
-        print(f"New route started: {route_id} with socket {sid}")
+        }
 
+        all_locations.append(existing_route)
+        started_routes[route_id] = sid
+
+        print(f"New route started: {route_id}")
 
     elif existing_route:
+
         if status == "stopped":
             all_locations.remove(existing_route)
+
         else:
             existing_route["latitude"] = latitude
             existing_route["longitude"] = longitude
             existing_route["heading"] = heading
             existing_route["status"] = status
             existing_route["socketId"] = sid
-    # Emit updated data to all connected clients
-    socketio.emit("location_update", existing_route)
-    
-    if is_in_college(longitude, latitude):
-        print(f"Bus {route_id} is in college")
-        log_data(route_id)
-        socketio.emit("server_stop", {
-            "message": "Disconnected by administrator",
-            "socket_id": sid,
-            "route_id": route_id
-        }, room=sid)     
-    return {"status": "received"}
 
-
-@socketio.on("final_update")
-def handle_final_update(data):
-    print("Received location update in final update:  ",data)
-    route_id = data.get("route_id")
-    latitude = data.get("latitude")
-    longitude = data.get("longitude")
-    heading = data.get("heading")  # New field
-    status = data.get("status")  # New field
-    sid=data.get("socket_id")
-    reason = data.get("reason")
-    
-    # Emit updated data to all connected clients
     socketio.emit("location_update", {
         "route_id": route_id,
         "latitude": latitude,
         "longitude": longitude,
-        "heading": heading,  # Send heading to clients
-        "status": "stopped"  # Send status to clients
-    })    
-    
-    existing_route = next((r for r in all_locations if r["route_id"] == route_id), None)
-    if existing_route:
-        all_locations.remove(existing_route)
-    
-    if route_id in started_routes.keys():
-        started_routes.pop(route_id, None)
-    
+        "heading": heading,
+        "status": status
+    })
+
+    print("Latitude:", latitude)
+    print("Longitude:", longitude)
+    print("Inside college:", is_in_college(longitude, latitude))
+
     if is_in_college(longitude, latitude):
         print(f"Bus {route_id} is in college")
         log_data(route_id)
-        socketio.emit("server_stop", {
-            "message": "Disconnected by administrator",
-            "socket_id": sid,
-            "route_id": route_id
-        }, room=sid) 
+
+        socketio.emit(
+            "server_stop",
+            {
+                "message": "Disconnected by administrator",
+                "socket_id": sid,
+                "route_id": route_id
+            },
+            room=sid
+        )
 
     return {"status": "received"}
-
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -538,31 +542,35 @@ def handle_message(data):
 
     conn = sqlite3.connect("database.db", check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO chat (room, sender, message) VALUES (?, ?, ?)", (room, sender, message))
+    cursor.execute(
+        "INSERT INTO chat (room, sender, message) VALUES (?, ?, ?)",
+        (room, sender, message)
+    )
     conn.commit()
     conn.close()
 
-    socketio.emit("chat_message", {
-        "sender": sender,
-        "message": message,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }, room=room)
+    socketio.emit(
+        "chat_message",
+        {
+            "room": room,
+            "sender": sender,
+            "message": message,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        },
+        room=room
+    )
 
 
-@app.route('/health', methods=['GET'])
+@app.route("/health", methods=["GET"])
 def health():
     return jsonify({
-        'status': 'healthy',
-        'service': 'bus-be',
-        'timestamp': datetime.now().isoformat()
+        "status": "healthy",
+        "service": "bus-be",
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 
-@app.route('/test')
-def test():
-    return "TEST ROUTE WORKING"
-
-@app.route('/auth/google', methods=['POST'])
+@app.route("/auth/google", methods=["POST"])
 def auth_google():
     try:
         data = request.get_json()
@@ -594,12 +602,63 @@ def auth_google():
         })
 
     except Exception as e:
-        print("Google Auth Error:", str(e))
+        import traceback
+        traceback.print_exc()
 
         return jsonify({
             "success": False,
             "error": str(e)
         }), 401
+@app.route("/get_all_locations", methods=["GET"])
+def api_get_all_locations():
+    return jsonify(all_locations)
+
+
+@app.route("/get_all_routes", methods=["GET"])
+def api_get_all_routes():
+    return jsonify(list(all_drivers.keys()))
+
+@app.route("/get_logs", methods=["GET"])
+def get_logs():
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT route_number, log_date, log_time 
+        FROM logs
+        ORDER BY log_date DESC, log_time DESC
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    logs = []
+    for r in rows:
+        logs.append({
+            "route_number": r[0],
+            "log_date": r[1],
+            "log_time": r[2]
+        })
+
+    return jsonify(logs)
+
+    # ADD THIS NEW ROUTE HERE
+@app.route("/proxy/get_logs", methods=["GET"])
+def proxy_get_logs():
+    try:
+        response = requests.get(
+            "https://dev-bus.vjstartup.com/get_logs",
+            timeout=10
+        )
+
+        return jsonify(response.json()), response.status_code
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 
 
 if __name__ == "__main__":
