@@ -1,5 +1,5 @@
 // ===== CONFIGURATION CONSTANTS =====
-const API_URL = "https://dev-bus.vjstartup.com/student";
+const API_URL = "http://localhost:2999";
 let socket; // Will be initialized after scripts are loaded
 
 // ===== GLOBAL VARIABLES =====
@@ -7,6 +7,9 @@ let GOOGLE_CLIENT_ID = null;
 let selectedRoute = localStorage.getItem("busApplicationSelectedRouteByStudent");
 let latestBusLocation = null;
 let markers = {};
+let userMarker = null;
+let routePolyline = null;
+let userLatLng = null;
 let firstRecenter = {};
 let map;
 const fixedLatLng = [17.539896, 78.386511];
@@ -363,7 +366,7 @@ function setupEventListeners() {
     if (chatBtn) {
         chatBtn.addEventListener("click", function() {
             setActive(this);
-            window.location.href = "https://dev-bus.vjstartup.com/chat";
+            window.location.href = "http://localhost:3104/chat";
         });
     }
     
@@ -407,9 +410,10 @@ function setupEventListeners() {
 // ===== AUTH FUNCTIONS =====
 function updateLoginButton() {
     const btn = document.getElementById("login-logout");
-
-    if (localStorage.getItem("user")) {
-        btn.innerHTML = "Logout";
+    if (!btn) return;
+    
+    if (getCookieValue("user") !== null) {
+        btn.innerHTML = "LogOut";
         btn.style.background = "red";
     } else {
         btn.innerHTML = "Login";
@@ -422,12 +426,10 @@ function login_logout(event) {
     let loginBtn = document.getElementById("login-logout");
     if (!loginBtn) return;
 
-   if (localStorage.getItem("user")) {
-    logout(event);
-} else {
-    openModal();
-
-
+    if (getCookieValue("user") !== null) {
+        logout(event);
+    } else {
+        openModal();
         const rollLoginForm = document.getElementById("rollLoginForm");
         const loginChoice = document.getElementById("loginChoice");
         
@@ -437,62 +439,50 @@ function login_logout(event) {
 }
 
 function handleCredentialResponse(response) {
-     console.log("API_URL =", API_URL);
     const token = response.credential;
     
     fetch(`${API_URL}/auth/google`, {
-    method: "POST",
-   
-    headers: {
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ token })
-})
-.then(async res => {
-    const data = await res.json();
-    console.log("Auth response:", data);
-    return data;
-})
-.then(data => {
-    if (data.success && data.user) {
-
-        localStorage.setItem("user", JSON.stringify(data.user));
-
-        const welcome = document.getElementById("welcomeText");
-        if (welcome) {
-            welcome.innerText = `Hello 👋 ${data.user.name}`;
+        method: "POST",
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ token })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.user) {
+            fill_tracking_info();
+            updateLoginButton();
+            closeModal();
+        } else {
+            alert("❌ Login failed!");
         }
-
-        const loginBtn = document.getElementById("login-logout");
-        if (loginBtn) {
-            loginBtn.innerText = data.user.email;
-        }
-
-        fill_tracking_info();
-        updateLoginButton();
-        closeModal();
-
-    } else {
-        alert("❌ Login failed!");
-    }
-})
-.catch(error => {
-    console.error("Error during Google authentication:", error);
-    alert("Error during login. Please try again.");
-});
+    })
+    .catch(error => {
+        console.error("Error during Google authentication:", error);
+        alert("Error during login. Please try again.");
+    });
 }
+
 async function logout(event) {
     event.preventDefault();
-
-    const confirmLogout = confirm("Are you sure you want to log out?");
+    const confirmLogout = confirm("Are you sure you want to log out..!!");
     if (!confirmLogout) return;
-
-    localStorage.removeItem("user");
-
+    
+    try {
+        await fetch(`${API_URL}/logout`, {
+            method: "POST",
+            credentials: "include"
+        });
+    } catch (error) {
+        console.error("Error logging out:", error);
+        alert("Error logging out");
+    }
+    
+    await sleep(1);
     updateLoginButton();
     fill_tracking_info();
-
-    location.reload();
 }
 
 function initializeGoogleSignIn() {
@@ -585,20 +575,25 @@ function startGoogleLogin() {
 function fill_tracking_info() {    
     // Safely get user name from cookie or localStorage
     let userName = "";
-let isLogged = false;
-
-const storedUser = localStorage.getItem("user");
-
-if (storedUser) {
-    isLogged = true;
-
-    try {
-        const userData = JSON.parse(storedUser);
-        userName = userData.name || "";
-    } catch (e) {
-        console.log("Error reading user", e);
+    const userCookie = getCookieValue("user");
+    let isLogged = false;
+    
+    if (userCookie) {
+        isLogged = true;
+        try {
+            // Try to parse the cookie directly first
+            const userData = JSON.parse(userCookie);
+            userName = userData.family_name || "";
+            
+            // If no family_name in direct parsing, try JWT decoding
+            if (!userName && userCookie.split('.').length === 3) {
+                const decoded = decodeJwt(userCookie);
+                userName = decoded.family_name || "";
+            }
+        } catch (e) {
+            console.log("Error parsing user cookie", e);
+        }
     }
-}
     
     const sRoute = localStorage.getItem("busApplicationSelectedRouteByStudent") ? 
                   localStorage.getItem("busApplicationSelectedRouteByStudent").split(" ")[0] : "";
@@ -607,14 +602,16 @@ if (storedUser) {
 
     if (!routeInfo) return;
 
-  const greeting = userName ? `Hello 👋 ${userName}` : `Hello 👋`;
-
-if (sRoute !== "") {
-    routeInfo.innerHTML =
-        `${greeting}<br>Tracking ${sRoute} 🔴`;
+  if (sRoute !== "") {
+    routeInfo.innerHTML = `
+        Hello ${userName} 👋<br>
+        Tracking ${sRoute} 🔴
+    `;
 } else {
-    routeInfo.innerHTML =
-        `${greeting}<br>No Route Being Tracked 🔴`;
+    routeInfo.innerHTML = `
+        Hello ${userName} 👋<br>
+        No Route Being Tracked 🔴
+    `;
 }
     
     if (isLogged) {
@@ -625,22 +622,37 @@ if (sRoute !== "") {
 }
 
 function getUserLocation(callback) {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                callback(`${lon},${lat}`);
-            },
-            (error) => {
-                console.error("Error fetching user location", error);
-                callback(null);
-            }
-        );
-    } else {
-        console.error("Geolocation is not supported by this browser.");
+    if (!navigator.geolocation) {
         callback(null);
+        return;
     }
+
+    navigator.geolocation.getCurrentPosition((position) => {
+
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        userLatLng = [lat, lng];
+
+        // Add or move the blue marker
+        if (!userMarker) {
+            userMarker = L.circleMarker(userLatLng, {
+                radius: 8,
+                color: "#fff",
+                weight: 2,
+                fillColor: "#007bff",
+                fillOpacity: 1
+            }).addTo(map);
+        } else {
+            userMarker.setLatLng(userLatLng);
+        }
+
+        callback(`${lng},${lat}`);
+
+    }, (err) => {
+        console.log(err);
+        callback(null);
+    });
 }
 
 async function getDistanceTime(origin, destination) {
@@ -665,13 +677,36 @@ async function getDistanceTime(origin, destination) {
         const correctedOrigin = `${originLat},${originLng}`;
         const correctedDestination = `${destinationLat},${destinationLng}`;
         
-        const url = `https://api.tomtom.com/routing/1/calculateRoute/${correctedOrigin}:${correctedDestination}/json?key=${apiKey}&traffic=true&routeType=fastest`;
+        const url =
+`https://api.tomtom.com/routing/1/calculateRoute/${correctedOrigin}:${correctedDestination}/json?key=${apiKey}&traffic=true&routeType=fastest&instructionsType=text&routeRepresentation=polyline`;
         
         const routeResponse = await fetch(url);
         const routeData = await routeResponse.json();
+        console.log(routeData);
         
         if (routeData.routes && routeData.routes.length > 0) {
             const route = routeData.routes[0].summary;
+            // Remove old line
+if (routePolyline) {
+    map.removeLayer(routePolyline);
+}
+
+// Convert TomTom route to Leaflet points
+const polylinePoints = routeData.routes[0].legs[0].points.map(point => [
+    point.latitude,
+    point.longitude
+]);
+
+// Draw new route
+routePolyline = L.polyline(polylinePoints, {
+    color: "blue",
+    weight: 5
+}).addTo(map);
+
+// Show both bus and user
+map.fitBounds(routePolyline.getBounds(), {
+    padding: [50, 50]
+});
             const distance = (route.lengthInMeters / 1000).toFixed(2) + " km";
             const minutes = Math.floor(route.travelTimeInSeconds / 60);
             const seconds = route.travelTimeInSeconds % 60;
@@ -830,18 +865,19 @@ socket.on("connect_error", (err) => {
             }
             
             const routeInfo = document.querySelector(".route_info");
-          const storedUser = localStorage.getItem("user");
-
-
-if (storedUser) {
-    try {
-        userName = JSON.parse(storedUser).name || "";
-    } catch (e) {}
-}
-
-routeInfo.innerHTML =
-    `Hello 👋 ${userName}<br>Tracking ${selectedRoute.split(" (")[0]} 🟢`;
+            if (routeInfo) {
+                routeInfo.innerHTML = `
+    Hello ${userName} 👋<br>
+    Tracking ${selectedRoute.split(" (")[0]} 🟢
+`;
+            }
+            
             latestBusLocation = `${data.longitude},${data.latitude}`;
+            getUserLocation((userLocation) => {
+    if (userLocation) {
+        getDistanceTime(userLocation, latestBusLocation);
+    }
+});
             updateFindDistanceVisibility();
             
             // Rest of the function remains the same...        
@@ -889,17 +925,12 @@ routeInfo.innerHTML =
             
             if (markers[selectedRoute] && markers[selectedRoute]._map) {
                 markers[selectedRoute].remove();
-               const storedUser = localStorage.getItem("user");
-let userName = "";
-
-if (storedUser) {
-    try {
-        userName = JSON.parse(storedUser).name || "";
-    } catch (e) {}
-}
-
-routeInfo.innerHTML =
-    `Hello 👋 ${userName}<br>Tracking ${selectedRoute.split(" (")[0]} 🔴`;
+                if (routeInfo) {
+                    routeInfo.innerHTML = `
+    Hello ${userName} 👋<br>
+    Tracking ${selectedRoute.split(" (")[0]} 🔴
+`;
+                }
             }
             
             firstRecenter[selectedRoute] = false;
