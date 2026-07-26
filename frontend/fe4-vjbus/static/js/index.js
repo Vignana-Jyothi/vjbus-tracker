@@ -7,6 +7,9 @@ let GOOGLE_CLIENT_ID = null;
 let selectedRoute = localStorage.getItem("busApplicationSelectedRouteByStudent");
 let latestBusLocation = null;
 let markers = {};
+let userMarker = null;
+let routePolyline = null;
+let userLatLng = null;
 let firstRecenter = {};
 let map;
 const fixedLatLng = [17.539896, 78.386511];
@@ -619,22 +622,37 @@ function fill_tracking_info() {
 }
 
 function getUserLocation(callback) {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                callback(`${lon},${lat}`);
-            },
-            (error) => {
-                console.error("Error fetching user location", error);
-                callback(null);
-            }
-        );
-    } else {
-        console.error("Geolocation is not supported by this browser.");
+    if (!navigator.geolocation) {
         callback(null);
+        return;
     }
+
+    navigator.geolocation.getCurrentPosition((position) => {
+
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        userLatLng = [lat, lng];
+
+        // Add or move the blue marker
+        if (!userMarker) {
+            userMarker = L.circleMarker(userLatLng, {
+                radius: 8,
+                color: "#fff",
+                weight: 2,
+                fillColor: "#007bff",
+                fillOpacity: 1
+            }).addTo(map);
+        } else {
+            userMarker.setLatLng(userLatLng);
+        }
+
+        callback(`${lng},${lat}`);
+
+    }, (err) => {
+        console.log(err);
+        callback(null);
+    });
 }
 
 async function getDistanceTime(origin, destination) {
@@ -659,13 +677,36 @@ async function getDistanceTime(origin, destination) {
         const correctedOrigin = `${originLat},${originLng}`;
         const correctedDestination = `${destinationLat},${destinationLng}`;
         
-        const url = `https://api.tomtom.com/routing/1/calculateRoute/${correctedOrigin}:${correctedDestination}/json?key=${apiKey}&traffic=true&routeType=fastest`;
+        const url =
+`https://api.tomtom.com/routing/1/calculateRoute/${correctedOrigin}:${correctedDestination}/json?key=${apiKey}&traffic=true&routeType=fastest&instructionsType=text&routeRepresentation=polyline`;
         
         const routeResponse = await fetch(url);
         const routeData = await routeResponse.json();
+        console.log(routeData);
         
         if (routeData.routes && routeData.routes.length > 0) {
             const route = routeData.routes[0].summary;
+            // Remove old line
+if (routePolyline) {
+    map.removeLayer(routePolyline);
+}
+
+// Convert TomTom route to Leaflet points
+const polylinePoints = routeData.routes[0].legs[0].points.map(point => [
+    point.latitude,
+    point.longitude
+]);
+
+// Draw new route
+routePolyline = L.polyline(polylinePoints, {
+    color: "blue",
+    weight: 5
+}).addTo(map);
+
+// Show both bus and user
+map.fitBounds(routePolyline.getBounds(), {
+    padding: [50, 50]
+});
             const distance = (route.lengthInMeters / 1000).toFixed(2) + " km";
             const minutes = Math.floor(route.travelTimeInSeconds / 60);
             const seconds = route.travelTimeInSeconds % 60;
@@ -832,6 +873,11 @@ socket.on("connect_error", (err) => {
             }
             
             latestBusLocation = `${data.longitude},${data.latitude}`;
+            getUserLocation((userLocation) => {
+    if (userLocation) {
+        getDistanceTime(userLocation, latestBusLocation);
+    }
+});
             updateFindDistanceVisibility();
             
             // Rest of the function remains the same...        
