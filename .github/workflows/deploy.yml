@@ -23,8 +23,8 @@ jobs:
 
       - name: Build and Restart Docker Compose
         run: |
-          docker-compose down
-          docker-compose up -d --build
+          docker compose down
+          docker compose up -d --build
 
       - name: Trigger Dev URL
         run: |
@@ -44,5 +44,5 @@ jobs:
 
       - name: Build and Restart Docker Compose
         run: |
-          docker-compose down
-          docker-compose up -d --build
+          docker compose down
+          docker compose up -d --build
