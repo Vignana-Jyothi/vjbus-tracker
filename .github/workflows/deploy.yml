@@ -1,0 +1,48 @@
+name: Deploy CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  deploy-dev:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: [self-hosted, dev-ai]
+    environment: bus-development
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Environment Variables
+        run: |
+          echo "Setting up environments from secrets if required..."
+          # You can map secrets to .env here, e.g.:
+          # echo "API_KEY=${{ secrets.API_KEY }}" > fe4-vjbus/.env
+
+      - name: Build and Restart Docker Compose
+        run: |
+          docker-compose down
+          docker-compose up -d --build
+
+      - name: Trigger Dev URL
+        run: |
+          curl -I https://dev-bus.vjstartup.com || echo "Triggered Dev URL"
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, gamma]
+    environment: bus-production
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Environment Variables
+        run: |
+          echo "Setting up environments from secrets if required..."
+
+      - name: Build and Restart Docker Compose
+        run: |
+          docker-compose down
+          docker-compose up -d --build

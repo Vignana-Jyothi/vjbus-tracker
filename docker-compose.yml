@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./be4-vjbus
+      dockerfile: Dockerfile
+    ports:
+      - "6104:6104"
+    volumes:
+      - ./be4-vjbus:/app
+    restart: unless-stopped
+    env_file:
+      - ./be4-vjbus/.env
+
+  frontend:
+    build:
+      context: ./fe4-vjbus
+      dockerfile: Dockerfile
+    ports:
+      - "3104:3104"
+    volumes:
+      - ./fe4-vjbus:/app
+      - ./be4-vjbus/database.db:/backend/database.db
+    restart: unless-stopped
+    environment:
+      - BACKEND_DB_PATH=/backend/database.db
+    env_file:
+      - ./fe4-vjbus/.env

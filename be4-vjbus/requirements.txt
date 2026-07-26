@@ -1,0 +1,8 @@
+eventlet
+geopy
+Flask
+Flask-Cors
+Flask-SocketIO
+python-dotenv
+google-auth
+requests
