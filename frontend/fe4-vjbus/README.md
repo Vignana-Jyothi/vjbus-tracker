@@ -19,7 +19,7 @@ driver.html & index.html : const socket = io("ws://10.45.8.187:3000"
 
 ## Servers
 
-Ensure to run the BE server from  ~/vj-servers/backend/be4-vjbus
+Ensure to run the BE server from  ~/vj-servers/backend/be4-vjbus..
 
 ### How to start the FE Server  (Terminal 2)
 
