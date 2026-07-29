@@ -8,11 +8,11 @@ services:
     container_name: vjbus-backend
     restart: unless-stopped
     ports:
-      - "6104:6104"
+      - "3000:3000"
     environment:
       - FLASK_ENV=production
       - BE_HOST=0.0.0.0
-      - BE_PORT=6104
+      - BE_PORT=3000
     env_file:
       - ../backend/be4-vjbus/.env
     volumes:
@@ -27,11 +27,11 @@ services:
     container_name: vjbus-frontend
     restart: unless-stopped
     ports:
-      - "3104:3104"
+      - "4000:4000"
     environment:
       - FLASK_ENV=production
       - FE_HOST=0.0.0.0
-      - FE_PORT=3104
+      - FE_PORT=4000
       - BE_SOCKET_URL=ws://103.248.208.119:3000   # production WS url
     env_file:
       - ../frontend/fe4-vjbus/.env
