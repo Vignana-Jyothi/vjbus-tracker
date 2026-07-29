@@ -13,6 +13,8 @@ services:
       - FLASK_ENV=production
       - BE_HOST=0.0.0.0
       - BE_PORT=3000
+    env_file:
+      - ../backend/be4-vjbus/.env
     networks:
       - vjbus-network
 
@@ -29,6 +31,8 @@ services:
       - FE_HOST=0.0.0.0
       - FE_PORT=4000
       - BE_SOCKET_URL=ws://103.248.208.119:3000   # production WS url
+    env_file:
+      - ../frontend/fe4-vjbus/.env
     depends_on:
       - be4-vjbus
     networks:
