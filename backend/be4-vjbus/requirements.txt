@@ -2,3 +2,7 @@ eventlet==0.36.1
 flask==3.1.0
 flask-cors==5.0.0
 flask-socketio==5.5.1
+geopy
+python-dotenv
+google-auth
+requests
