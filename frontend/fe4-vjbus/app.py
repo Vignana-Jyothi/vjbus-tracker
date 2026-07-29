@@ -94,6 +94,7 @@ def marker():
 
 
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 3104))
+    port_str = os.environ.get("FE_PORT") or os.environ.get("PORT") or "4000"
+    port = int(port_str)
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     app.run(host="0.0.0.0", port=port, debug=debug)

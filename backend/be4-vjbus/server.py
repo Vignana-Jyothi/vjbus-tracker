@@ -42,7 +42,7 @@ else:
     print("ERROR: all_start_timings not found in .env")
     all_start_timings = {}
 
-PORT = 6104
+PORT = int(os.environ.get("BE_PORT") or os.environ.get("PORT") or 3000)
 CLIENT_ID = "719105319954-5alrrgdri16s96121ikn662p16ltp2nj.apps.googleusercontent.com"
 
 # Check port availability
