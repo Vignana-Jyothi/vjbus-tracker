@@ -60,6 +60,8 @@ jobs:
       - name: Setup Environment Secrets
         run: |
           cat <<EOF > backend/be4-vjbus/.env
+          all_routes=${{ secrets.ALL_ROUTES }}
+          all_start_timings=${{ secrets.ALL_START_TIMINGS }}
           ALL_ROUTES=${{ secrets.ALL_ROUTES }}
           ALL_START_TIMINGS=${{ secrets.ALL_START_TIMINGS }}
           API_KEY=${{ secrets.API_KEY }}
@@ -93,6 +95,8 @@ jobs:
       - name: Setup Environment Secrets
         run: |
           cat <<EOF > backend/be4-vjbus/.env
+          all_routes=${{ secrets.ALL_ROUTES }}
+          all_start_timings=${{ secrets.ALL_START_TIMINGS }}
           ALL_ROUTES=${{ secrets.ALL_ROUTES }}
           ALL_START_TIMINGS=${{ secrets.ALL_START_TIMINGS }}
           API_KEY=${{ secrets.API_KEY }}
