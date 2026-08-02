@@ -596,10 +596,12 @@ def auth_google():
 
         print("Google Login Success:", user)
 
-        return jsonify({
+        resp = jsonify({
             "success": True,
             "user": user
         })
+        resp.set_cookie("user", json.dumps(user), httponly=False, path="/")
+        return resp
 
     except Exception as e:
         print("Google Auth Error:", str(e))
@@ -611,7 +613,9 @@ def auth_google():
 
 @app.route("/logout", methods=["POST"])
 def logout():
-    return jsonify({"success": True}), 200
+    resp = jsonify({"success": True})
+    resp.set_cookie("user", "", expires=0, path="/")
+    return resp
 @app.route("/get_all_locations", methods=["GET"])
 def api_get_all_locations():
     return jsonify(all_locations)
