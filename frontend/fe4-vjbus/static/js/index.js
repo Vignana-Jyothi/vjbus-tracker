@@ -480,6 +480,11 @@ async function logout(event) {
         alert("Error logging out");
     }
     
+    // Force clear the cookie from the browser for all possible domains/paths
+    document.cookie = "user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.vjstartup.com;";
+    document.cookie = "user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=dev-bus.vjstartup.com;";
+    
     await sleep(1);
     updateLoginButton();
     fill_tracking_info();
