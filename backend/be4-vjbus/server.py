@@ -602,13 +602,16 @@ def auth_google():
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-
+        print("Google Auth Error:", str(e))
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": "Authentication failed"
         }), 401
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    return jsonify({"success": True}), 200
 @app.route("/get_all_locations", methods=["GET"])
 def api_get_all_locations():
     return jsonify(all_locations)
