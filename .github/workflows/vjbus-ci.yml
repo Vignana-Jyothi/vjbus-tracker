@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
 
       - uses: actions/setup-python@v5
         with:
@@ -56,6 +58,8 @@ jobs:
     environment: bus-development
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Setup Environment Secrets
         run: |
@@ -91,6 +95,8 @@ jobs:
     environment: bus-production
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Setup Environment Secrets
         run: |
