@@ -456,7 +456,7 @@ function handleCredentialResponse(response) {
             updateLoginButton();
             closeModal();
         } else {
-            alert("❌ Login failed!");
+            alert(`❌ Login failed! ${data.error || 'Unknown error'}`);
         }
     })
     .catch(error => {
