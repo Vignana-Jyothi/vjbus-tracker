@@ -1,7 +1,7 @@
 # vj-servers
 Code place for all Vignana Jyothi campus application servers (frontend &amp; backend)
 
-# Folder Structure
+# Folder Structure.
 
 Frontend (Workstation1)
   - fe1-server  : React application with Google/Github OAuth login
