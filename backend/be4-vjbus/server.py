@@ -43,7 +43,7 @@ else:
     all_start_timings = {}
 
 PORT = int(os.environ.get("BE_PORT") or os.environ.get("PORT") or 3000)
-CLIENT_ID = "719105319954-5alrrgdri16s96121ikn662p16ltp2nj.apps.googleusercontent.com"
+CLIENT_ID = os.environ.get("CLIENT_ID", "719105319954-5alrrgdri16s96121ikn662p16ltp2nj.apps.googleusercontent.com")
 
 # Check port availability
 def is_port_in_use(port):
@@ -607,7 +607,7 @@ def auth_google():
         print("Google Auth Error:", str(e))
         return jsonify({
             "success": False,
-            "error": "Authentication failed"
+            "error": f"Authentication failed: {str(e)}"
         }), 401
 
 
