@@ -1,7 +1,7 @@
 
 ## Setup 
 
-### One time setup
+### One time setup.
 
 cd
 python3 -m venv vjbus_env
