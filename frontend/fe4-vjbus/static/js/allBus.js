@@ -84,7 +84,7 @@ function addFixedMarker() {
  * Subscribe to all available routes
  */
 function subscribeToAllRoutes() {
-    fetch("http://localhost:6104/get_all_routes")
+    fetch("/bus-be/get_all_routes")
         .then(response => response.json())
         .then(routes => {
             console.log("Available routes:", routes);
@@ -130,7 +130,7 @@ function initializeSocketListeners() {
  * Fetch current active connections
  */
 function fetchActiveConnections() {
-    fetch("http://localhost:6104/get_all_locations")
+    fetch("/bus-be/get_all_locations")
         .then(response => response.json())
         .then(activeRoutes => {
             console.log("Active routes:", activeRoutes);

@@ -6,7 +6,7 @@
 // -------------------------
 // Global Variables
 // -------------------------
-const socket = io("http://localhost:6104", {
+const socket = io("wss://dev-bus.vjstartup.com", {
     transports: ["websocket"]
 });
 let state = {
@@ -420,7 +420,7 @@ if (homeButton) {
 
     homeButton.addEventListener("click", function () {
 
-        window.location.href = "http://localhost:3104";
+        window.location.href = "/";
 
     });
 

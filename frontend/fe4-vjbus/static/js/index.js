@@ -366,7 +366,7 @@ function setupEventListeners() {
     if (chatBtn) {
         chatBtn.addEventListener("click", function() {
             setActive(this);
-            window.location.href = "http://localhost:3104/chat";
+            window.location.href = "/chat";
         });
     }
     

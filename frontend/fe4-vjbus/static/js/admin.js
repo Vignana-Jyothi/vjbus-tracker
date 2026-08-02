@@ -122,7 +122,7 @@ function logout() {
  */
 async function fetchLogs() {
     try {
-        const response = await fetch("http://localhost:6104/proxy/get_logs");
+        const response = await fetch("/bus-be/proxy/get_logs");
 
         console.log("Status:", response.status);
         console.log("OK:", response.ok);
