@@ -1,5 +1,5 @@
 // ===== CONFIGURATION CONSTANTS =====
-const API_URL = "http://localhost:2999";
+const API_URL = "/bus-be";
 let socket; // Will be initialized after scripts are loaded
 
 // ===== GLOBAL VARIABLES =====
