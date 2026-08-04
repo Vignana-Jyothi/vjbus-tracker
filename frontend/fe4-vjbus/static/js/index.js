@@ -500,7 +500,6 @@ function initializeGoogleSignIn() {
         google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleCredentialResponse,
-            hosted_domain: "vnrvjiet.in",
             ux_mode: "popup"
         });
         
